@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(myProject LANGUAGES CXX)
+project(wordsCounter LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
