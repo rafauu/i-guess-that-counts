@@ -1,82 +1,31 @@
-#include <fmt/core.h>
-#include <span>
-#include <unordered_set>
-#include <cctype>
-#include <string>
+#pragma once
+
+#include <cstddef>
+#include <new>
 #include <string_view>
-#include "ConcurrentContainerFacade.hpp"
-#include "ThreadPool.hpp"
 
+#include <ankerl/unordered_dense.h>
 
-constexpr auto operator""_MB(unsigned long long value)
+#include "XXH3Hasher.hpp"
+
+constexpr auto operator""_MB(unsigned long long value) noexcept
 {
-    return value * 1024u * 1024u;
+    return value * 1024 * 1024;
 }
 
 class UniqueWordsCounter
 {
 private:
-    constexpr static unsigned long long MAX_CHUNK_SIZE = 1_MB;
+    static constexpr size_t TARGET_CHUNK_SIZE = 2_MB;
 
     template <typename T>
-    using UnderlyingStructure = std::unordered_set<T>;
+    using HashSet = ankerl::unordered_dense::set<T, XXH3Hasher>;
 
-    template <typename T>
-    auto calculateChunkSize(std::span<const T> memory, unsigned long long offset) const
+    struct alignas(std::hardware_destructive_interference_size) ThreadResult
     {
-        unsigned long long chunkSize;
-        if (memory.size() - offset < MAX_CHUNK_SIZE)
-        {
-            chunkSize = memory.size() - offset;
-        }
-        else
-        {
-            chunkSize = MAX_CHUNK_SIZE;
-            while (chunkSize > 0 and not std::isspace(memory[offset + chunkSize - 1]))
-                --chunkSize;
-        }
-        return chunkSize;
-    }
-
-    auto getUniqueWords(std::string_view str) const
-    {
-        UnderlyingStructure<std::string> temp;
-
-        static constexpr std::string_view delimiters{" \n"};
-        size_t start;
-        size_t end = 0;
-        while ((start = str.find_first_not_of(delimiters, end)) != std::string_view::npos)
-        {
-            end = str.find_first_of(delimiters, start);
-            temp.emplace(str.substr(start, end - start));
-        }
-
-        return temp;
-    }
+        HashSet<std::string_view> wordSet;
+    };
 
 public:
-    template <typename T>
-    auto count(std::span<const T> memory) const
-    {
-        ConcurrentContainerFacade<UnderlyingStructure, std::string> words;
-        ThreadPool threadPool;
-        unsigned long long offset = 0;
-
-        while(offset < memory.size())
-        {
-            if (threadPool.getTasksAmount() < threadPool.getThreadAmount())
-            {
-                auto chunkSize = calculateChunkSize(memory, offset);
-                threadPool.pushTask([=, this, &words] {
-                    words.insert(getUniqueWords({memory.data() + offset, chunkSize}));
-                });
-
-                fmt::print("Processing segment: {} - {}\n", offset, offset + chunkSize - 1);
-                offset += chunkSize;
-            }
-        }
-
-        threadPool.waitForTasks();
-        return words.size();
-    }
+    size_t count(std::string_view memory);
 };
