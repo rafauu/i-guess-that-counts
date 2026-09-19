@@ -2,9 +2,7 @@
 Unique words counter
 
 ```
-mkdir -p build && cd build
-cmake ..
-cmake --build .
-chmod +x wordsCounter
-./wordsCounter input.txt
+cmake -B build -G Ninja
+cmake --build build
+./build/wordsCounter ../input.txt
 ```

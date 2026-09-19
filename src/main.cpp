@@ -1,8 +1,9 @@
-#include <print>
 #include <mio/mmap.hpp>
-#include "SystemUtils.hpp"
-#include "UniqueWordsCounter.hpp"
 
+import std;
+
+import system_utils;
+import unique_words_counter;
 
 int main(int argc, char* argv[])
 {

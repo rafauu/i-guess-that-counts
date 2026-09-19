@@ -1,10 +1,14 @@
-#include "SystemUtils.hpp"
+module;
 
 #if defined(__linux__) || defined(__unix__)
-    #include <sys/mman.h>
+#include <sys/mman.h>
 #endif
 
-namespace SystemUtils
+export module system_utils;
+
+import std;
+
+export namespace SystemUtils
 {
     void adviseSequentialAccess(std::string_view memory) noexcept
     {
