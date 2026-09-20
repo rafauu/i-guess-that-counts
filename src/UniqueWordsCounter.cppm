@@ -1,13 +1,11 @@
 module;
 
-#include <ankerl/unordered_dense.h>
-
 export module unique_words_counter;
 
-import std;
-
 import affinity_handler;
-import xxh3_hasher;
+import simd;
+
+import std;
 
 constexpr auto operator""_MB(unsigned long long value) noexcept
 {
@@ -18,21 +16,23 @@ constexpr auto isWhitespaceWithoutLocale = [](char c) noexcept {
     return static_cast<unsigned char>(c) <= 32;
 };
 
-export class UniqueWordsCounter
+export template <template <typename, typename...> class Container, typename Hasher>
+class UniqueWordsCounter
 {
 private:
-    static constexpr size_t TARGET_CHUNK_SIZE = 2_MB;
+    static constexpr std::size_t TARGET_CHUNK_SIZE = 2_MB;
+    static constexpr std::size_t NUM_PARTITIONS = 16; // Power of 2 for fast modulo (& mask)
 
     template <typename T>
-    using HashSet = ankerl::unordered_dense::set<T, XXH3Hasher>;
+    using HashSet = Container<T, Hasher>;
 
     struct alignas(std::hardware_destructive_interference_size) ThreadResult
     {
-        HashSet<std::string_view> wordSet;
+        std::array<HashSet<std::string_view>, NUM_PARTITIONS> partitions;
     };
 
 public:
-    size_t count(std::string_view memory)
+    std::size_t count(std::string_view memory)
     {
         if (memory.empty())
         {
@@ -40,13 +40,14 @@ public:
         }
 
         // 1. Boundary Chunking
+        auto t0 = std::chrono::high_resolution_clock::now();
         std::vector<std::string_view> chunks;
         chunks.reserve(memory.size() / TARGET_CHUNK_SIZE + 1);
 
-        size_t offset = 0;
+        std::size_t offset = 0;
         while (offset < memory.size())
         {
-            size_t end = std::min(offset + TARGET_CHUNK_SIZE, memory.size());
+            std::size_t end = std::min(offset + TARGET_CHUNK_SIZE, memory.size());
             if (end < memory.size())
             {
                 while (end > offset and not isWhitespaceWithoutLocale(static_cast<unsigned char>(memory[end - 1])))
@@ -64,9 +65,10 @@ public:
 
         const unsigned numThreads = std::max(1u, std::thread::hardware_concurrency());
         std::vector<ThreadResult> threadResults(numThreads);
-        std::atomic<size_t> nextChunkIndex{0};
+        std::atomic<std::size_t> nextChunkIndex{0};
 
-        // 2. MAP Phase
+        auto t1 = std::chrono::high_resolution_clock::now();
+        // 2. MAP Phase (Tokenize & Direct Hash Partitioning)
         {
             std::vector<std::jthread> workers;
             workers.reserve(numThreads);
@@ -76,75 +78,84 @@ public:
                 workers.emplace_back([&, t] {
                     AffinityHandler::pinThreadToHwCore(t);
 
-                    HashSet<std::string_view> localStackSet;
-                    localStackSet.reserve(65536);
+                    Hasher hasher{};
 
                     while (true)
                     {
-                        size_t idx = nextChunkIndex.fetch_add(1, std::memory_order_relaxed);
+                        std::size_t idx = nextChunkIndex.fetch_add(1, std::memory_order_relaxed);
                         if (idx >= chunks.size())
+                        {
                             break;
+                        }
 
                         const auto& chunk = chunks[idx];
-                        auto it = std::ranges::begin(chunk);
-                        auto end = std::ranges::end(chunk);
+                        const char* ptr = chunk.data();
+                        const char* end = chunk.data() + chunk.size();
 
-                        while (it != end)
+                        while (ptr < end)
                         {
-                            it = std::ranges::find_if_not(it, end, isWhitespaceWithoutLocale);
-                            if (it == end)
+                            // 1. SIMD skip leading whitespace
+                            ptr = Simd::skip_whitespace_avx2(ptr, end);
+                            if (ptr >= end)
                             {
                                 break;
                             }
 
-                            auto start = it;
-                            it = std::ranges::find_if(start, end, isWhitespaceWithoutLocale);
+                            // 2. SIMD find end of the word
+                            const char* word_start = ptr;
+                            ptr = Simd::find_whitespace_avx2(word_start, end);
 
-                            if (start != it)
-                            {
-                                localStackSet.emplace(std::string_view{start, it});
-                            }
+                            // 3. Hash word view once and route directly to partition
+                            std::string_view word{word_start, static_cast<std::size_t>(ptr - word_start)};
+                            std::size_t partitionIdx = hasher(word) & (NUM_PARTITIONS - 1);
+
+                            threadResults[t].partitions[partitionIdx].emplace(word);
                         }
                     }
-
-                    threadResults[t].wordSet = std::move(localStackSet);
                 });
             }
         }
 
-        // 3. Parallel Tree Reduction Phase (Merging thread sets)
-        size_t activeCount = numThreads;
-        while (activeCount > 1)
+        // 3. REDUCE Phase (Direct Single-Pass Partition Reduction)
+        auto t2 = std::chrono::high_resolution_clock::now();
         {
-            size_t half = (activeCount + 1) / 2;
+            std::vector<std::jthread> mergeWorkers;
+            mergeWorkers.reserve(NUM_PARTITIONS);
+
+            for (auto p : std::views::iota(0uz, NUM_PARTITIONS))
             {
-                std::vector<std::jthread> mergeWorkers;
-                mergeWorkers.reserve(activeCount / 2);
+                mergeWorkers.emplace_back([&, p] {
+                    AffinityHandler::pinThreadToHwCore(static_cast<unsigned>(p % numThreads));
 
-                for (auto i : std::views::iota(0uz, activeCount / 2uz))
-                {
-                    size_t sourceIdx = i + half;
-                    if (sourceIdx < activeCount)
+                    auto& targetPartition = threadResults[0].partitions[p];
+
+                    // Merge partition 'p' from all other worker threads
+                    for (std::size_t t = 1; t < numThreads; ++t)
                     {
-                        mergeWorkers.emplace_back([&, targetIdx = i, sourceIdx] {
-                            AffinityHandler::pinThreadToHwCore(targetIdx);
-
-                            auto& targetSet = threadResults[targetIdx].wordSet;
-                            auto& sourceSet = threadResults[sourceIdx].wordSet;
-
-                            targetSet.reserve(targetSet.size() + sourceSet.size());
-
-                            targetSet.insert(
-                                std::make_move_iterator(sourceSet.begin()),
-                                std::make_move_iterator(sourceSet.end())
-                            );
-                        });
+                        auto& sourcePartition = threadResults[t].partitions[p];
+                        targetPartition.insert(
+                            std::make_move_iterator(sourcePartition.begin()),
+                            std::make_move_iterator(sourcePartition.end())
+                        );
                     }
-                }
+                });
             }
-            activeCount = half;
         }
 
-        return threadResults[0].wordSet.size();
+        // 4. Sum up unique elements across all merged partitions
+        auto t3 = std::chrono::high_resolution_clock::now();
+        std::size_t totalUniqueWords = 0;
+        for (std::size_t p = 0; p < NUM_PARTITIONS; ++p)
+        {
+            totalUniqueWords += threadResults[0].partitions[p].size();
+        }
+        auto t4 = std::chrono::high_resolution_clock::now();
+
+        std::println("{} ms", std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
+        std::println("{} ms", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
+        std::println("{} ms", std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count());
+        std::println("{} ms", std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3).count());
+
+        return totalUniqueWords;
     }
 };

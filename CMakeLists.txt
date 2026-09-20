@@ -23,6 +23,37 @@ CPMAddPackage(
     "BUILD_SHARED_LIBS OFF"
     "XXHASH_BUILD_XXHSUM OFF"
 )
+set(BOOST_INCLUDE_LIBRARIES unordered)
+CPMAddPackage(
+  NAME Boost
+  GITHUB_REPOSITORY boostorg/boost
+  GIT_TAG boost-1.92.0
+)
+CPMAddPackage(
+  NAME absl
+  GITHUB_REPOSITORY abseil/abseil-cpp
+  GIT_TAG 20260817.0
+  OPTIONS
+    "ABSL_PROPAGATE_CXX_SETTINGS ON"
+    "ABSL_ENABLE_INSTALL ON"
+    "BUILD_TESTING OFF"
+)
+CPMAddPackage(
+  NAME wyhash
+  GITHUB_REPOSITORY wangyi-fudan/wyhash
+  GIT_TAG wyhash_final4
+)
+CPMAddPackage(
+  NAME mimalloc
+  GITHUB_REPOSITORY microsoft/mimalloc
+  GIT_TAG v3.5.3
+  OPTIONS
+    "MI_BUILD_SHARED OFF" # Build static library
+    "MI_BUILD_OBJECT OFF" # Do not build separate object file
+    "MI_BUILD_TESTS OFF"  # Disable unit tests
+    "MI_OVERRIDE ON"      # Automatically override C/C++ malloc/free/new/delete
+    "MI_GUARDED OFF"      # Disables guarded sampling allocator
+)
 
 add_executable(${PROJECT_NAME}
   src/main.cpp
@@ -62,6 +93,7 @@ target_sources(${PROJECT_NAME}
     FILE_SET std_module TYPE CXX_MODULES BASE_DIRS "${GCC_STD_DIR}" FILES ${GCC_STD_MODULE}
     FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
       src/AffinityHandler.cppm
+      src/Simd.cppm
       src/SystemUtils.cppm
       src/UniqueWordsCounter.cppm
       src/XXH3Hasher.cppm
@@ -69,10 +101,21 @@ target_sources(${PROJECT_NAME}
 
 find_package(Threads REQUIRED)
 
+#target_include_directories(${PROJECT_NAME} PRIVATE "${absl_SOURCE_DIR}")
+
+if(wyhash_ADDED AND NOT TARGET wyhash::wyhash)
+  add_library(wyhash::wyhash INTERFACE IMPORTED GLOBAL)
+  target_include_directories(wyhash::wyhash INTERFACE "${wyhash_SOURCE_DIR}")
+endif()
+
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     Threads::Threads
     mio
     unordered_dense::unordered_dense
     xxhash
+    Boost::unordered
+    absl::flat_hash_set
+    wyhash::wyhash
+    mimalloc-static
 )
