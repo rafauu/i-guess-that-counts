@@ -1,59 +1,12 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 4.2)
 
 project(wordsCounter LANGUAGES CXX)
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-endif()
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-include(cmake/CPM.cmake)
-
-CPMAddPackage("gh:vimpunk/mio#master")
-CPMAddPackage("gh:martinus/unordered_dense@4.11.0")
-CPMAddPackage(
-  NAME xxHash
-  GITHUB_REPOSITORY Cyan4973/xxHash
-  VERSION 0.8.3
-  SOURCE_SUBDIR cmake_unofficial
-  OPTIONS
-    "BUILD_SHARED_LIBS OFF"
-    "XXHASH_BUILD_XXHSUM OFF"
-)
-set(BOOST_INCLUDE_LIBRARIES unordered)
-CPMAddPackage(
-  NAME Boost
-  GITHUB_REPOSITORY boostorg/boost
-  GIT_TAG boost-1.92.0
-)
-CPMAddPackage(
-  NAME absl
-  GITHUB_REPOSITORY abseil/abseil-cpp
-  GIT_TAG 20260817.0
-  OPTIONS
-    "ABSL_PROPAGATE_CXX_SETTINGS ON"
-    "ABSL_ENABLE_INSTALL ON"
-    "BUILD_TESTING OFF"
-)
-CPMAddPackage(
-  NAME wyhash
-  GITHUB_REPOSITORY wangyi-fudan/wyhash
-  GIT_TAG wyhash_final4
-)
-CPMAddPackage(
-  NAME mimalloc
-  GITHUB_REPOSITORY microsoft/mimalloc
-  GIT_TAG v3.5.3
-  OPTIONS
-    "MI_BUILD_SHARED OFF" # Build static library
-    "MI_BUILD_OBJECT OFF" # Do not build separate object file
-    "MI_BUILD_TESTS OFF"  # Disable unit tests
-    "MI_OVERRIDE ON"      # Automatically override C/C++ malloc/free/new/delete
-    "MI_GUARDED OFF"      # Disables guarded sampling allocator
-)
+set(CMAKE_LINKER_TYPE MOLD)
 
 add_executable(${PROJECT_NAME}
   src/main.cpp
@@ -90,32 +43,51 @@ endif()
 
 target_sources(${PROJECT_NAME}
   PRIVATE
-    FILE_SET std_module TYPE CXX_MODULES BASE_DIRS "${GCC_STD_DIR}" FILES ${GCC_STD_MODULE}
-    FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-      src/AffinityHandler.cppm
-      src/Simd.cppm
-      src/SystemUtils.cppm
-      src/UniqueWordsCounter.cppm
-      src/XXH3Hasher.cppm
+    FILE_SET std_module TYPE CXX_MODULES
+      BASE_DIRS "${GCC_STD_DIR}"
+      FILES
+        ${GCC_STD_MODULE}
+    FILE_SET CXX_MODULES TYPE CXX_MODULES
+      FILES
+        src/AffinityHandler.cppm
+        src/Simd.cppm
+        src/SystemUtils.cppm
+        src/UniqueWordsCounter.cppm
+        src/Hasher.cppm
+  PRIVATE
+    src/Hasher.cpp
 )
 
 find_package(Threads REQUIRED)
+find_package(mimalloc)
+find_package(jemalloc REQUIRED)
+find_package(mio)
+find_package(Boost)
+find_package(folly)
+find_package(robin_hood)
+find_package(unordered_dense)
+find_package(tsl-robin-map)
+find_package(tsl-sparse-map)
+find_package(xxHash)
+find_package(absl)
+find_package(wyhash)
+find_package(rapidhash)
 
-#target_include_directories(${PROJECT_NAME} PRIVATE "${absl_SOURCE_DIR}")
-
-if(wyhash_ADDED AND NOT TARGET wyhash::wyhash)
-  add_library(wyhash::wyhash INTERFACE IMPORTED GLOBAL)
-  target_include_directories(wyhash::wyhash INTERFACE "${wyhash_SOURCE_DIR}")
-endif()
 
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     Threads::Threads
-    mio
+    #mimalloc-static
+    jemalloc::jemalloc
+    mio::mio
+    boost::boost
+    folly::folly
+    robin_hood::robin_hood
     unordered_dense::unordered_dense
-    xxhash
-    Boost::unordered
-    absl::flat_hash_set
+    tsl::robin_map
+    tsl::sparse_map
+    xxHash::xxhash
+    abseil::abseil
     wyhash::wyhash
-    mimalloc-static
+    rapidhash::rapidhash
 )

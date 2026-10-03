@@ -5,8 +5,8 @@ module;
 #define _GNU_SOURCE
 #endif
 
-#include <sched.h>
 #include <pthread.h>
+#include <sched.h>
 #endif
 
 export module affinity_handler;

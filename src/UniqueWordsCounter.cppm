@@ -20,8 +20,9 @@ export template <template <typename, typename...> class Container, typename Hash
 class UniqueWordsCounter
 {
 private:
-    static constexpr std::size_t TARGET_CHUNK_SIZE = 2_MB;
-    static constexpr std::size_t NUM_PARTITIONS = 16; // Power of 2 for fast modulo (& mask)
+    static constexpr std::size_t TARGET_CHUNK_SIZE = 1_MB;
+    static constexpr std::size_t NUM_PARTITIONS = 8;
+    static constexpr std::size_t INITIAL_CAPACITY_PER_WORKER_PARTITION = 8192;
 
     template <typename T>
     using HashSet = Container<T, Hasher>;
@@ -65,9 +66,19 @@ public:
 
         const unsigned numThreads = std::max(1u, std::thread::hardware_concurrency());
         std::vector<ThreadResult> threadResults(numThreads);
+
+        for (auto& result : threadResults)
+        {
+            for (auto& partition : result.partitions)
+            {
+                partition.reserve(INITIAL_CAPACITY_PER_WORKER_PARTITION);
+            }
+        }
+
         std::atomic<std::size_t> nextChunkIndex{0};
 
         auto t1 = std::chrono::high_resolution_clock::now();
+
         // 2. MAP Phase (Tokenize & Direct Hash Partitioning)
         {
             std::vector<std::jthread> workers;
@@ -94,18 +105,16 @@ public:
 
                         while (ptr < end)
                         {
-                            // 1. SIMD skip leading whitespace
                             ptr = Simd::skip_whitespace_avx2(ptr, end);
                             if (ptr >= end)
                             {
                                 break;
                             }
 
-                            // 2. SIMD find end of the word
                             const char* word_start = ptr;
                             ptr = Simd::find_whitespace_avx2(word_start, end);
 
-                            // 3. Hash word view once and route directly to partition
+                            // Hash word view once and route directly to partition
                             std::string_view word{word_start, static_cast<std::size_t>(ptr - word_start)};
                             std::size_t partitionIdx = hasher(word) & (NUM_PARTITIONS - 1);
 
@@ -159,3 +168,4 @@ public:
         return totalUniqueWords;
     }
 };
+
