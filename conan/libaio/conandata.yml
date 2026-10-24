@@ -1,4 +1,5 @@
 sources:
   0.3.113:
     sha256: 2c44d1c5fd0d43752287c9ae1eb9c023f04ef848ea8d4aafa46e9aedb678200b
-    url: https://releases.pagure.org/libaio/libaio-0.3.113.tar.gz # previous link was broken
+    url: https://releases.pagure.org/libaio/libaio-0.3.113.tar.gz # conan-center link is broken
+    # in the moment of writing this -> https://github.com/conan-io/conan-center-index/commit/6bcf0d042d5f7e1ff4731406fa0c4a8fe31645f8

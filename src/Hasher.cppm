@@ -4,6 +4,8 @@ module;
 #include <absl/hash/hash.h>
 #include <ankerl/unordered_dense.h>
 #include <wyhash.h>
+#include <rapidhash.h>
+#include <farmhash.h>
 
 export module hasher;
 
@@ -28,9 +30,8 @@ export struct FollyHasher
 {
     using is_avalanching = void;
 
-    //template <typename T>
-    //[[nodiscard]] static std::size_t operator()(const T& obj) noexcept
-    [[nodiscard]] static std::size_t operator()(std::string_view obj) noexcept
+    template <typename T>
+    [[nodiscard]] static std::size_t operator()(const T& obj) noexcept
     {
         return folly_hash(obj);
     }
@@ -96,5 +97,32 @@ export struct WyHasher
         {
             return wyhash_bytes(&key, sizeof(T));
         }
+    }
+};
+
+[[nodiscard]] std::size_t rapidhash_impl(const void* data, std::size_t size) noexcept
+{
+    return rapidhash(data, size);
+}
+
+export struct RapidHasher
+{
+    using is_avalanching = void;
+
+    template <typename T>
+    [[nodiscard]] static std::size_t operator()(const T& key) noexcept
+    {
+        return rapidhash_impl(key.data(), key.size());
+    }
+};
+
+export struct FarmHasher
+{
+    using is_avalanching = void;
+
+    template <typename T>
+    [[nodiscard]] static std::size_t operator()(const T& key) noexcept
+    {
+        return util::Hash(key);
     }
 };

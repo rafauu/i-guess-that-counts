@@ -49,19 +49,25 @@ target_sources(${PROJECT_NAME}
         ${GCC_STD_MODULE}
     FILE_SET CXX_MODULES TYPE CXX_MODULES
       FILES
-        src/AffinityHandler.cppm
-        src/Simd.cppm
-        src/SystemUtils.cppm
-        src/UniqueWordsCounter.cppm
+        src/CompactFlatSet.cppm
         src/Hasher.cppm
+        src/HugeFileMapper.cppm
+        src/SystemUtils.cppm
+        src/TextProcessor.cppm
+        src/UniqueWordsCounter.cppm
   PRIVATE
+    src/Benchmark.cpp
+    src/FileReader.cpp
     src/Hasher.cpp
 )
 
 find_package(Threads REQUIRED)
 find_package(mimalloc)
-find_package(jemalloc REQUIRED)
+find_package(jemalloc)
 find_package(mio)
+find_package(nameof)
+find_package(phmap)
+find_package(tsl-hopscotch-map)
 find_package(Boost)
 find_package(folly)
 find_package(robin_hood)
@@ -72,14 +78,17 @@ find_package(xxHash)
 find_package(absl)
 find_package(wyhash)
 find_package(rapidhash)
-
+find_package(farmhash)
 
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     Threads::Threads
-    #mimalloc-static
-    jemalloc::jemalloc
+    mimalloc-static
+    #jemalloc::jemalloc
     mio::mio
+    nameof::nameof
+    phmap
+    tsl::hopscotch_map
     boost::boost
     folly::folly
     robin_hood::robin_hood
@@ -90,4 +99,5 @@ target_link_libraries(${PROJECT_NAME}
     abseil::abseil
     wyhash::wyhash
     rapidhash::rapidhash
+    farmhash::farmhash
 )

@@ -8,4 +8,3 @@ std::size_t folly_hash(std::string_view value) noexcept
 {
     return folly::hasher<std::string_view>{}(value);
 }
-

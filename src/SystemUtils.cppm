@@ -1,9 +1,11 @@
 module;
 
-#if defined(__linux__) || defined(__unix__)
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
-#endif
+#include <pthread.h>
+#include <sched.h>
 
 export module system_utils;
 
@@ -11,26 +13,37 @@ import std;
 
 export namespace SystemUtils
 {
-    void adviseSequentialAccess(std::string_view memory) noexcept
-    {
-        if (memory.empty() or memory.data() == nullptr)
-        {
-            return;
-        }
 
-#if defined(__linux__) || defined(__unix__)
-        auto callMadvise = [&] (auto flag) {
-            ::madvise(
-                const_cast<char*>(memory.data()),
-                memory.size(),
-                flag
-            );
-        };
-        callMadvise(MADV_HUGEPAGE);
-        callMadvise(MADV_SEQUENTIAL);
-        callMadvise(MADV_WILLNEED);
-#else
-        (void)memory;
-#endif
+namespace Affinity
+{
+
+void pinThreadToHwCore(unsigned core_id) noexcept
+{
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+}
+
+}
+
+void adviseHugePage(std::string_view memory) noexcept
+{
+    if (memory.empty() or memory.data() == nullptr)
+    {
+        return;
     }
+
+    auto callMadvise = [&] (auto flag) {
+        ::madvise(
+            const_cast<char*>(memory.data()),
+            memory.size(),
+            flag
+        );
+    };
+    callMadvise(MADV_WILLNEED);
+    callMadvise(MADV_HUGEPAGE);
+    //callMadvise(MADV_SEQUENTIAL);
+}
+
 }

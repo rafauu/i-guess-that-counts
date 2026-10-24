@@ -2,6 +2,9 @@
 mimalloc/3.5.1
 jemalloc/5.3.0
 mio/cci.20230303
+nameof/0.10.6
+parallel-hashmap/2.0.0
+tsl-hopscotch-map/2.3.1
 boost/1.91.0
 folly/2026.07.06.00
 robin-hood-hashing/3.11.5
@@ -12,6 +15,7 @@ xxhash/0.8.3
 abseil/20260526.0
 wyhash/final4
 rapidhash/3.0
+farmhash/cci.20190513
 
 [generators]
 CMakeDeps
