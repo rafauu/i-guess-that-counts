@@ -49,9 +49,7 @@ target_sources(${PROJECT_NAME}
         ${GCC_STD_MODULE}
     FILE_SET CXX_MODULES TYPE CXX_MODULES
       FILES
-        src/CompactFlatSet.cppm
         src/Hasher.cppm
-        src/HugeFileMapper.cppm
         src/SystemUtils.cppm
         src/TextProcessor.cppm
         src/UniqueWordsCounter.cppm
