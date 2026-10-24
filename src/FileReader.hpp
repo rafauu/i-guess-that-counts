@@ -10,8 +10,8 @@ namespace FileReader
     struct MmapResult
     {
         mio::mmap_source keepAlive;
-        std::string_view fileMemory;
+        std::string_view view;
     };
 
-    std::expected<MmapResult, std::error_code> mmap(const char* filename);
+    std::expected<MmapResult, std::error_code> mmap(std::string_view filename);
 }

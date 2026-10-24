@@ -127,10 +127,9 @@ std::vector<Result> runCartesianProduct(std::string_view fileMemory)
 
     return results;
 }
-
-Result runOne(std::string_view fileMemory)
+std::vector<Result> runOne(std::string_view fileMemory)
 {
-    return runImpl<boost::unordered_flat_set, AbslHasher>(fileMemory);
+    return {runImpl<boost::unordered_flat_set, AbslHasher>(fileMemory)};
 }
 
 }

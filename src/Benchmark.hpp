@@ -14,6 +14,6 @@ struct Result
 };
 
 std::vector<Result> runCartesianProduct(std::string_view fileMemory);
-Result runOne(std::string_view fileMemory);
+std::vector<Result> runOne(std::string_view fileMemory);
 
 }

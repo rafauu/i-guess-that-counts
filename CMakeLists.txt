@@ -49,6 +49,7 @@ target_sources(${PROJECT_NAME}
         ${GCC_STD_MODULE}
     FILE_SET CXX_MODULES TYPE CXX_MODULES
       FILES
+        src/ArgParser.cppm
         src/Hasher.cppm
         src/SystemUtils.cppm
         src/TextProcessor.cppm
@@ -62,6 +63,7 @@ target_sources(${PROJECT_NAME}
 find_package(Threads REQUIRED)
 find_package(mimalloc)
 find_package(jemalloc)
+find_package(argparse)
 find_package(mio)
 find_package(nameof)
 find_package(phmap)
@@ -83,6 +85,7 @@ target_link_libraries(${PROJECT_NAME}
     Threads::Threads
     mimalloc-static
     #jemalloc::jemalloc
+    argparse::argparse
     mio::mio
     nameof::nameof
     phmap

@@ -5,7 +5,7 @@ import system_utils;
 
 namespace FileReader
 {
-    std::expected<MmapResult, std::error_code> mmap(const char* filename)
+    std::expected<MmapResult, std::error_code> mmap(std::string_view filename)
     {
         std::println("File to be mapped: {}", filename);
 
@@ -25,7 +25,7 @@ namespace FileReader
 
         return MmapResult{
             .keepAlive = std::move(mmapSource),
-            .fileMemory = fileMemory
+            .view = fileMemory
         };
     }
 }

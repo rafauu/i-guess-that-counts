@@ -2,35 +2,13 @@
 #include "FileReader.hpp"
 
 import std;
-
-//import compact_flat_set;
-//import file_mapper;
+import arg_parser;
 
 
-int main(int argc, char* argv[])
+static void printResults(const auto& results)
 {
-    if (argc != 2)
-    {
-        std::println("Please specify one input file");
-        return 1;
-    }
-
-    auto mmapResult = FileReader::mmap(argv[1]);
-    if (not mmapResult)
-    {
-        std::println("Failed to memory-map file: {}", mmapResult.error().message());
-        return 1;
-    }
-
-    const auto fileMemory = mmapResult.value().fileMemory;
-
-    auto _ = Benchmark::runOne(fileMemory);
-    auto results = Benchmark::runCartesianProduct(fileMemory);
-
-    std::ranges::sort(results, {}, &Benchmark::Result::milliseconds);
-
     std::println(
-        "{:<90} {:>12} {:>12}",
+        "{:<100} {:>12} {:>12}",
         "Hash set",
         "Unique words",
         "Time (ms)"
@@ -41,10 +19,39 @@ int main(int argc, char* argv[])
     for (const auto& result : results)
     {
         std::println(
-            "{:<90} {:>12} {:>12.3f}",
+            "{:<100} {:>12} {:>12.3f}",
             result.setName,
             result.uniqueWords,
             result.milliseconds
         );
     }
+}
+
+int main(int argc, char* argv[])
+{
+    const auto parseResult = ArgParser::parse(argc, argv);
+
+    if (not parseResult)
+    {
+        std::println("Argument parsing error: {}", parseResult.error());
+        return 1;
+    }
+
+    const auto mmapResult = FileReader::mmap(parseResult->filename);
+    if (not mmapResult)
+    {
+        std::println("Failed to memory-map file: {}", mmapResult.error().message());
+        return 1;
+    }
+
+    const auto fileMemory = mmapResult->view;
+    const auto benchmarkFn = parseResult->benchmark == "single"
+                             ? &Benchmark::runOne
+                             : &Benchmark::runCartesianProduct;
+
+    auto benchmarkData = benchmarkFn(fileMemory);
+
+    std::ranges::sort(benchmarkData, {}, &Benchmark::Result::milliseconds);
+
+    printResults(benchmarkData);
 }

@@ -34,16 +34,11 @@ void adviseHugePage(std::string_view memory) noexcept
         return;
     }
 
-    auto callMadvise = [&] (auto flag) {
-        ::madvise(
-            const_cast<char*>(memory.data()),
-            memory.size(),
-            flag
-        );
-    };
-    callMadvise(MADV_WILLNEED);
-    callMadvise(MADV_HUGEPAGE);
-    //callMadvise(MADV_SEQUENTIAL);
+    ::madvise(
+        const_cast<char*>(memory.data()),
+        memory.size(),
+        MADV_HUGEPAGE
+    );
 }
 
 }
